@@ -1,5 +1,6 @@
 <resources>
+    <string name="app_name">StayOff</string>
     <string name="accessibility_service_description">
-        StayOff monitors apps to block Shorts, Reels and distracting content.
+        StayOff blocks distracting apps, reels, shorts, and websites.
     </string>
 </resources>

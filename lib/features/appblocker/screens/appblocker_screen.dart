@@ -4,6 +4,7 @@ import 'package:focusguard/core/theme/app_theme.dart';
 import 'package:focusguard/shared/widgets/fg_widgets.dart';
 import 'package:focusguard/features/appblocker/models/blocked_app.dart';
 import 'package:focusguard/features/appblocker/providers/appblocker_provider.dart';
+import 'package:focusguard/features/appblocker/providers/installed_apps_provider.dart';
 
 class AppBlockerScreen extends ConsumerWidget {
   const AppBlockerScreen({super.key});
@@ -250,9 +251,26 @@ class _AppRow extends ConsumerWidget {
                   border: Border.all(
                     color: (app.iconColor ?? FGColors.border).withOpacity(0.3)),
                 ),
+                // child: Center(
+                //   child: Text(app.iconEmoji,
+                //     style: const TextStyle(fontSize: 22))),
                 child: Center(
-                  child: Text(app.iconEmoji,
-                    style: const TextStyle(fontSize: 22))),
+                  child: app.icon != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.memory(
+                            app.icon!,
+                            width: 26,
+                            height: 26,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
+                        )
+                      : Text(
+                          app.iconEmoji,
+                          style: const TextStyle(fontSize: 22),
+                        ),
+                ),
               ),
               const SizedBox(width: 12),
 
@@ -355,226 +373,591 @@ class _AppRow extends ConsumerWidget {
 // If not found, we show a "not found" message with a note to contact support.
 
 // Comprehensive name → package lookup (case-insensitive)
-const _kAppLookup = {
-  // Social
-  'instagram':       ('com.instagram.android',            'Instagram',        '📸'),
-  'facebook':        ('com.facebook.katana',              'Facebook',         '📘'),
-  'x':               ('com.twitter.android',              'Twitter / X',      '𝕏'),
-  'snapchat':        ('com.snapchat.android',             'Snapchat',         '👻'),
-  'reddit':          ('com.reddit.frontpage',             'Reddit',           '🟠'),
-  'pinterest':       ('com.pinterest',                    'Pinterest',         '📌'),
-  'linkedin':        ('com.linkedin.android',             'LinkedIn',         '💼'),
-  'sharechat':       ('com.sharechat.sharechat',          'ShareChat',        '📱'),
-  // Short-form video
-  'tiktok':          ('com.zhiliaoapp.musically',         'TikTok',           '🎵'),
-  'youtube':         ('com.google.android.youtube',       'YouTube',          '▶️'),
-  'josh':            ('com.joshapp.android',              'Josh',             '🎬'),
-  'moj':             ('com.moj.app',                      'Moj',              '🎭'),
-  'mx takatak':      ('com.mxtakatak',                    'MX TakaTak',       '🎵'),
-  'youtube shorts':  ('com.google.android.youtube',       'YouTube',          '▶️'),
-  'shorts':          ('com.google.android.youtube',       'YouTube',          '▶️'),
-  // Messaging
-  'whatsapp':        ('com.whatsapp',                     'WhatsApp',         '💬'),
-  'telegram':        ('com.telegram.messenger',           'Telegram',         '✈️'),
-  'discord':         ('com.discord',                      'Discord',          '💬'),
-  'signal':          ('org.thoughtcrime.securesms',       'Signal',           '🔒'),
-  'messenger':       ('com.facebook.orca',                'Messenger',        '💬'),
-  // Entertainment / streaming
-  'netflix':         ('com.netflix.mediaclient',          'Netflix',          '🎬'),
-  'hotstar':         ('com.jiohotstar',                      'JioHotstar',          '⭐'),
-  'prime video':     ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
-  'amazon prime':    ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
-  'prime':           ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
-  'zee5':            ('com.zee5.android',                 'ZEE5',             '📺'),
-  'jiocinema':       ('com.jio.media.jioplay',            'JioCinema',        '🎞️'),
-  'spotify':         ('com.spotify.music',                'Spotify',          '🎵'),
-  'mx player':       ('com.mxtech.videoplayer.ad',        'MX Player',        '▶️'),
-  'mx':              ('com.mxtech.videoplayer.ad',        'MX Player',        '▶️'),
-  // Gaming
-  'bgmi':            ('com.pubg.imobile',                 'BGMI',             '🎮'),
-  'pubg':            ('com.pubg.imobile',                 'BGMI',             '🎮'),
-  'free fire':       ('com.dts.freefireth',               'Free Fire',        '🔥'),
-  'freefire':        ('com.dts.freefireth',               'Free Fire',        '🔥'),
-  'clash of clans':  ('com.supercell.clashofclans',       'Clash of Clans',   '⚔️'),
-  'coc':             ('com.supercell.clashofclans',       'Clash of Clans',   '⚔️'),
-  'clash royale':    ('com.supercell.clashroyale',        'Clash Royale',     '🃏'),
-  'roblox':          ('com.roblox.client',                'Roblox',           '🎮'),
-  'minecraft':       ('com.mojang.minecraftpe',           'Minecraft',        '⛏️'),
-  'cod':             ('com.activision.callofduty.shooter','COD Mobile',       '🔫'),
-  'call of duty':    ('com.activision.callofduty.shooter','COD Mobile',       '🔫'),
-  'genshin':         ('com.miHoYo.GenshinImpact',        'Genshin Impact',   '🌟'),
-};
+// const _kAppLookup = {
+//   // Social
+//   'instagram':       ('com.instagram.android',            'Instagram',        '📸'),
+//   'facebook':        ('com.facebook.katana',              'Facebook',         '📘'),
+//   'x':               ('com.twitter.android',              'Twitter / X',      '𝕏'),
+//   'snapchat':        ('com.snapchat.android',             'Snapchat',         '👻'),
+//   'reddit':          ('com.reddit.frontpage',             'Reddit',           '🟠'),
+//   'pinterest':       ('com.pinterest',                    'Pinterest',         '📌'),
+//   'linkedin':        ('com.linkedin.android',             'LinkedIn',         '💼'),
+//   'sharechat':       ('com.sharechat.sharechat',          'ShareChat',        '📱'),
+//   // Short-form video
+//   'tiktok':          ('com.zhiliaoapp.musically',         'TikTok',           '🎵'),
+//   'youtube':         ('com.google.android.youtube',       'YouTube',          '▶️'),
+//   'josh':            ('com.joshapp.android',              'Josh',             '🎬'),
+//   'moj':             ('com.moj.app',                      'Moj',              '🎭'),
+//   'mx takatak':      ('com.mxtakatak',                    'MX TakaTak',       '🎵'),
+//   'youtube shorts':  ('com.google.android.youtube',       'YouTube',          '▶️'),
+//   'shorts':          ('com.google.android.youtube',       'YouTube',          '▶️'),
+//   // Messaging
+//   'whatsapp':        ('com.whatsapp',                     'WhatsApp',         '💬'),
+//   'telegram':        ('com.telegram.messenger',           'Telegram',         '✈️'),
+//   'discord':         ('com.discord',                      'Discord',          '💬'),
+//   'signal':          ('org.thoughtcrime.securesms',       'Signal',           '🔒'),
+//   'messenger':       ('com.facebook.orca',                'Messenger',        '💬'),
+//   // Entertainment / streaming
+//   'netflix':         ('com.netflix.mediaclient',          'Netflix',          '🎬'),
+//   'hotstar':         ('com.jiohotstar',                      'JioHotstar',          '⭐'),
+//   'prime video':     ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
+//   'amazon prime':    ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
+//   'prime':           ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
+//   'zee5':            ('com.zee5.android',                 'ZEE5',             '📺'),
+//   'jiocinema':       ('com.jio.media.jioplay',            'JioCinema',        '🎞️'),
+//   'spotify':         ('com.spotify.music',                'Spotify',          '🎵'),
+//   'mx player':       ('com.mxtech.videoplayer.ad',        'MX Player',        '▶️'),
+//   'mx':              ('com.mxtech.videoplayer.ad',        'MX Player',        '▶️'),
+//   // Gaming
+//   'bgmi':            ('com.pubg.imobile',                 'BGMI',             '🎮'),
+//   'pubg':            ('com.pubg.imobile',                 'BGMI',             '🎮'),
+//   'free fire':       ('com.dts.freefireth',               'Free Fire',        '🔥'),
+//   'freefire':        ('com.dts.freefireth',               'Free Fire',        '🔥'),
+//   'clash of clans':  ('com.supercell.clashofclans',       'Clash of Clans',   '⚔️'),
+//   'coc':             ('com.supercell.clashofclans',       'Clash of Clans',   '⚔️'),
+//   'clash royale':    ('com.supercell.clashroyale',        'Clash Royale',     '🃏'),
+//   'roblox':          ('com.roblox.client',                'Roblox',           '🎮'),
+//   'minecraft':       ('com.mojang.minecraftpe',           'Minecraft',        '⛏️'),
+//   'cod':             ('com.activision.callofduty.shooter','COD Mobile',       '🔫'),
+//   'call of duty':    ('com.activision.callofduty.shooter','COD Mobile',       '🔫'),
+//   'genshin':         ('com.miHoYo.GenshinImpact',        'Genshin Impact',   '🌟'),
+// };
+
+
+
+// class _AddAppSheet extends ConsumerStatefulWidget {
+//   const _AddAppSheet();
+//   @override ConsumerState<_AddAppSheet> createState() => _AddAppSheetState();
+// }
+
+// class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
+//   final _searchCtrl = TextEditingController();
+//   (String, String, String)? _found;   // (packageName, displayName, emoji)
+//   bool _notFound  = false;
+//   bool _adding    = false;
+
+//   @override void dispose() { _searchCtrl.dispose(); super.dispose(); }
+
+//   void _onChanged(String query) {
+//     final q = query.trim().toLowerCase();
+//     if (q.isEmpty) { setState(() { _found = null; _notFound = false; }); return; }
+//     final match = _kAppLookup[q];
+//     setState(() {
+//       _found    = match;
+//       _notFound = match == null && q.length >= 3;
+//     });
+//   }
+
+//   Future<void> _add() async {
+//     if (_found == null) return;
+//     final (pkg, name, emoji) = _found!;
+//     final already = ref.read(appBlockerProvider).blockedApps.any((a) => a.packageName == pkg);
+//     if (already) { Navigator.pop(context); return; }
+//     setState(() => _adding = true);
+//     await ref.read(appBlockerProvider.notifier).addApp(SuggestedApp(
+//       packageName: pkg, displayName: name, iconEmoji: emoji,
+//       iconColor: const Color(0xFF7C6FED), category: AppCategory.other,icon: iconBytes,
+//     ));
+//     setState(() => _adding = false);
+//     if (mounted) Navigator.pop(context);
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final isDark = Theme.of(context).brightness == Brightness.dark;
+//     final bottom = MediaQuery.of(context).viewInsets.bottom;
+//     final bg2  = isDark ? FGColors.bg2  : FGColorsLight.bg2;
+//     final bg3  = isDark ? FGColors.bg3  : FGColorsLight.bg3;
+//     final bg4  = isDark ? FGColors.bg4  : FGColorsLight.bg4;
+//     final b2   = isDark ? FGColors.border2 : FGColorsLight.border2;
+//     final b    = isDark ? FGColors.border  : FGColorsLight.border;
+//     final tp   = isDark ? FGColors.textPrimary : FGColorsLight.textPrimary;
+//     final ts   = isDark ? FGColors.textSecond  : FGColorsLight.textSecond;
+//     final tt   = isDark ? FGColors.textThird   : FGColorsLight.textThird;
+//     final p    = isDark ? FGColors.purple      : FGColorsLight.purple;
+//     final teal = isDark ? FGColors.teal        : FGColorsLight.teal;
+//     final red  = isDark ? FGColors.red         : FGColorsLight.red;
+//     final blocked = ref.watch(appBlockerProvider).blockedApps.map((a) => a.packageName).toSet();
+
+//     return ConstrainedBox(
+//       constraints: BoxConstraints(
+//         maxHeight: MediaQuery.of(context).size.height * 0.92,
+//       ),
+//       child: Container(
+//       decoration: BoxDecoration(
+//         color: bg2,
+//         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+//         border: Border(top: BorderSide(color: b2))),
+//       padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottom),
+//       child: SingleChildScrollView(
+//         physics: const ClampingScrollPhysics(),
+//         child: Column(mainAxisSize: MainAxisSize.min, children: [
+//         Center(child: Container(width: 40, height: 4,
+//           decoration: BoxDecoration(color: b2, borderRadius: FGRadius.full))),
+//         const SizedBox(height: 20),
+//         Text('Block an app', style: TextStyle(fontFamily: 'Syne',
+//           fontSize: 18, fontWeight: FontWeight.w700, color: tp)),
+//         const SizedBox(height: 4),
+//         Text('Type the app name to find and block it.',
+//           style: TextStyle(fontFamily: 'DM Sans', fontSize: 12, color: ts)),
+//         const SizedBox(height: 18),
+
+//         // Search field
+//         TextField(
+//           controller: _searchCtrl,
+//           autofocus: true,
+//           onChanged: _onChanged,
+//           style: TextStyle(fontFamily: 'DM Sans', fontSize: 14, color: tp),
+//           cursorColor: p,
+//           decoration: InputDecoration(
+//             hintText: 'e.g.  Netflix  or  Free Fire  or  Hotstar',
+//             hintStyle: TextStyle(color: tt, fontSize: 13),
+//             filled: true, fillColor: bg4,
+//             prefixIcon: Icon(Icons.search_rounded, color: tt, size: 20),
+//             suffixIcon: _searchCtrl.text.isNotEmpty
+//               ? GestureDetector(
+//                   onTap: () { _searchCtrl.clear(); setState(() { _found = null; _notFound = false; }); },
+//                   child: Icon(Icons.clear_rounded, color: tt, size: 18))
+//               : null,
+//             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+//             border: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: b2)),
+//             enabledBorder: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: b2)),
+//             focusedBorder: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: p, width: 1.5)))),
+//         const SizedBox(height: 12),
+
+//         // Result
+//         if (_found != null) ...[
+//           () {
+//             final (pkg, name, emoji) = _found!;
+//             final alreadyBlocked = blocked.contains(pkg);
+//             return Container(
+//               padding: const EdgeInsets.all(14),
+//               decoration: BoxDecoration(
+//                 color: alreadyBlocked ? bg3 : teal.withOpacity(0.08),
+//                 borderRadius: FGRadius.md,
+//                 border: Border.all(color: alreadyBlocked ? b : teal.withOpacity(0.3))),
+//               child: Row(children: [
+//                 Text(emoji, style: const TextStyle(fontSize: 24)),
+//                 const SizedBox(width: 12),
+//                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+//                   Text(name, style: TextStyle(fontFamily: 'DM Sans',
+//                     fontSize: 14, fontWeight: FontWeight.w600, color: tp)),
+//                   Text(alreadyBlocked ? 'Already blocked' : 'Found — tap to block',
+//                     style: TextStyle(fontFamily: 'DM Sans', fontSize: 11,
+//                       color: alreadyBlocked ? tt : teal)),
+//                 ])),
+//                 if (!alreadyBlocked)
+//                   Icon(Icons.check_circle_outline_rounded, color: teal, size: 20),
+//               ]));
+//           }(),
+//           const SizedBox(height: 12),
+//           if (!blocked.contains(_found!.$1))
+//             FGButton(label: 'Block ${_found!.$2}', icon: Icons.block_rounded,
+//               loading: _adding, onTap: _add),
+//         ] else if (_notFound) ...[
+//           _ManualPkgEntry(searchName: _searchCtrl.text.trim()),
+//         ],
+
+//         const SizedBox(height: 16),
+//         Divider(height: 1, color: b),
+//         const SizedBox(height: 14),
+
+//         // Popular quick picks (not yet blocked)
+//         Text('Popular', style: TextStyle(fontFamily: 'Syne',
+//           fontSize: 13, fontWeight: FontWeight.w700, color: tp)),
+//         const SizedBox(height: 10),
+//         Wrap(spacing: 8, runSpacing: 8, children: [
+//           for (final entry in _kAppLookup.entries.take(16))
+//             if (!blocked.contains(entry.value.$1))
+//               GestureDetector(
+//                 onTap: () async {
+//                   final (pkg, name, emoji) = entry.value;
+//                   setState(() => _adding = true);
+//                   await ref.read(appBlockerProvider.notifier).addApp(SuggestedApp(
+//                     packageName: pkg, displayName: name, iconEmoji: emoji,
+//                     iconColor: const Color(0xFF7C6FED), category: AppCategory.other));
+//                   setState(() => _adding = false);
+//                   if (mounted) Navigator.pop(context);
+//                 },
+//                 child: Container(
+//                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+//                   decoration: BoxDecoration(color: bg3, borderRadius: FGRadius.full,
+//                     border: Border.all(color: b)),
+//                   child: Row(mainAxisSize: MainAxisSize.min, children: [
+//                     Text(entry.value.$3, style: const TextStyle(fontSize: 13)),
+//                     const SizedBox(width: 5),
+//                     Text(entry.value.$2, style: TextStyle(fontFamily: 'DM Sans',
+//                       fontSize: 12, fontWeight: FontWeight.w500, color: ts)),
+//                   ]))),
+//         ]),
+//        ],
+//       ), 
+//      ),
+//      ),
+//      );
+//   }
+// }
+
 
 class _AddAppSheet extends ConsumerStatefulWidget {
   const _AddAppSheet();
-  @override ConsumerState<_AddAppSheet> createState() => _AddAppSheetState();
+
+  @override
+  ConsumerState<_AddAppSheet> createState() => _AddAppSheetState();
 }
 
 class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
-  final _searchCtrl = TextEditingController();
-  (String, String, String)? _found;   // (packageName, displayName, emoji)
-  bool _notFound  = false;
-  bool _adding    = false;
+  final TextEditingController _searchCtrl = TextEditingController();
 
-  @override void dispose() { _searchCtrl.dispose(); super.dispose(); }
+  @override
+  void initState() {
+    super.initState();
 
-  void _onChanged(String query) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) { setState(() { _found = null; _notFound = false; }); return; }
-    final match = _kAppLookup[q];
-    setState(() {
-      _found    = match;
-      _notFound = match == null && q.length >= 3;
+    Future.microtask(() {
+      ref.read(installedAppsProvider.notifier).loadApps();
     });
   }
 
-  Future<void> _add() async {
-    if (_found == null) return;
-    final (pkg, name, emoji) = _found!;
-    final already = ref.read(appBlockerProvider).blockedApps.any((a) => a.packageName == pkg);
-    if (already) { Navigator.pop(context); return; }
-    setState(() => _adding = true);
-    await ref.read(appBlockerProvider.notifier).addApp(SuggestedApp(
-      packageName: pkg, displayName: name, iconEmoji: emoji,
-      iconColor: const Color(0xFF7C6FED), category: AppCategory.other,
-    ));
-    setState(() => _adding = false);
-    if (mounted) Navigator.pop(context);
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final bg2  = isDark ? FGColors.bg2  : FGColorsLight.bg2;
-    final bg3  = isDark ? FGColors.bg3  : FGColorsLight.bg3;
-    final bg4  = isDark ? FGColors.bg4  : FGColorsLight.bg4;
-    final b2   = isDark ? FGColors.border2 : FGColorsLight.border2;
-    final b    = isDark ? FGColors.border  : FGColorsLight.border;
-    final tp   = isDark ? FGColors.textPrimary : FGColorsLight.textPrimary;
-    final ts   = isDark ? FGColors.textSecond  : FGColorsLight.textSecond;
-    final tt   = isDark ? FGColors.textThird   : FGColorsLight.textThird;
-    final p    = isDark ? FGColors.purple      : FGColorsLight.purple;
-    final teal = isDark ? FGColors.teal        : FGColorsLight.teal;
-    final red  = isDark ? FGColors.red         : FGColorsLight.red;
-    final blocked = ref.watch(appBlockerProvider).blockedApps.map((a) => a.packageName).toSet();
+    final installedState = ref.watch(installedAppsProvider);
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.92,
+    return Container(
+      decoration: const BoxDecoration(
+        color: FGColors.bg2,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+        border: Border(
+          top: BorderSide(
+            color: FGColors.border2,
+          ),
+        ),
       ),
-      child: Container(
-      decoration: BoxDecoration(
-        color: bg2,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: b2))),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottom),
-      child: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Center(child: Container(width: 40, height: 4,
-          decoration: BoxDecoration(color: b2, borderRadius: FGRadius.full))),
-        const SizedBox(height: 20),
-        Text('Block an app', style: TextStyle(fontFamily: 'Syne',
-          fontSize: 18, fontWeight: FontWeight.w700, color: tp)),
-        const SizedBox(height: 4),
-        Text('Type the app name to find and block it.',
-          style: TextStyle(fontFamily: 'DM Sans', fontSize: 12, color: ts)),
-        const SizedBox(height: 18),
 
-        // Search field
-        TextField(
-          controller: _searchCtrl,
-          autofocus: true,
-          onChanged: _onChanged,
-          style: TextStyle(fontFamily: 'DM Sans', fontSize: 14, color: tp),
-          cursorColor: p,
-          decoration: InputDecoration(
-            hintText: 'e.g.  Netflix  or  Free Fire  or  Hotstar',
-            hintStyle: TextStyle(color: tt, fontSize: 13),
-            filled: true, fillColor: bg4,
-            prefixIcon: Icon(Icons.search_rounded, color: tt, size: 20),
-            suffixIcon: _searchCtrl.text.isNotEmpty
-              ? GestureDetector(
-                  onTap: () { _searchCtrl.clear(); setState(() { _found = null; _notFound = false; }); },
-                  child: Icon(Icons.clear_rounded, color: tt, size: 18))
-              : null,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            border: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: b2)),
-            enabledBorder: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: b2)),
-            focusedBorder: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: p, width: 1.5)))),
-        const SizedBox(height: 12),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 14),
 
-        // Result
-        if (_found != null) ...[
-          () {
-            final (pkg, name, emoji) = _found!;
-            final alreadyBlocked = blocked.contains(pkg);
-            return Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: alreadyBlocked ? bg3 : teal.withOpacity(0.08),
-                borderRadius: FGRadius.md,
-                border: Border.all(color: alreadyBlocked ? b : teal.withOpacity(0.3))),
-              child: Row(children: [
-                Text(emoji, style: const TextStyle(fontSize: 24)),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, style: TextStyle(fontFamily: 'DM Sans',
-                    fontSize: 14, fontWeight: FontWeight.w600, color: tp)),
-                  Text(alreadyBlocked ? 'Already blocked' : 'Found — tap to block',
-                    style: TextStyle(fontFamily: 'DM Sans', fontSize: 11,
-                      color: alreadyBlocked ? tt : teal)),
-                ])),
-                if (!alreadyBlocked)
-                  Icon(Icons.check_circle_outline_rounded, color: teal, size: 20),
-              ]));
-          }(),
-          const SizedBox(height: 12),
-          if (!blocked.contains(_found!.$1))
-            FGButton(label: 'Block ${_found!.$2}', icon: Icons.block_rounded,
-              loading: _adding, onTap: _add),
-        ] else if (_notFound) ...[
-          _ManualPkgEntry(searchName: _searchCtrl.text.trim()),
-        ],
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: FGColors.border2,
+                  borderRadius: FGRadius.full,
+                ),
+              ),
+            ),
 
-        const SizedBox(height: 16),
-        Divider(height: 1, color: b),
-        const SizedBox(height: 14),
+            const SizedBox(height: 20),
 
-        // Popular quick picks (not yet blocked)
-        Text('Popular', style: TextStyle(fontFamily: 'Syne',
-          fontSize: 13, fontWeight: FontWeight.w700, color: tp)),
-        const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final entry in _kAppLookup.entries.take(16))
-            if (!blocked.contains(entry.value.$1))
-              GestureDetector(
-                onTap: () async {
-                  final (pkg, name, emoji) = entry.value;
-                  setState(() => _adding = true);
-                  await ref.read(appBlockerProvider.notifier).addApp(SuggestedApp(
-                    packageName: pkg, displayName: name, iconEmoji: emoji,
-                    iconColor: const Color(0xFF7C6FED), category: AppCategory.other));
-                  setState(() => _adding = false);
-                  if (mounted) Navigator.pop(context);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(color: bg3, borderRadius: FGRadius.full,
-                    border: Border.all(color: b)),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(entry.value.$3, style: const TextStyle(fontSize: 13)),
-                    const SizedBox(width: 5),
-                    Text(entry.value.$2, style: TextStyle(fontFamily: 'DM Sans',
-                      fontSize: 12, fontWeight: FontWeight.w500, color: ts)),
-                  ]))),
-        ]),
-       ],
-      ), 
-     ),
-     ),
-     );
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Block installed apps',
+                    style: TextStyle(
+                      fontFamily: 'Syne',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: FGColors.textPrimary,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  const Text(
+                    'Search apps installed on your device.',
+                    style: TextStyle(
+                      fontFamily: 'DM Sans',
+                      fontSize: 12,
+                      color: FGColors.textThird,
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  TextField(
+                    controller: _searchCtrl,
+                    onChanged: (v) {
+                      ref
+                          .read(installedAppsProvider.notifier)
+                          .search(v);
+                    },
+                    style: const TextStyle(
+                      color: FGColors.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search installed apps...',
+                      hintStyle: const TextStyle(
+                        color: FGColors.textThird,
+                      ),
+
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: FGColors.textThird,
+                      ),
+
+                      filled: true,
+                      fillColor: FGColors.bg4,
+
+                      border: OutlineInputBorder(
+                        borderRadius: FGRadius.md,
+                        borderSide: BorderSide.none,
+                      ),
+
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: FGRadius.md,
+                        borderSide: BorderSide.none,
+                      ),
+
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: FGRadius.md,
+                        borderSide: const BorderSide(
+                          color: FGColors.purple,
+                          width: 1.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: installedState.loading
+                  ? const Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  : installedState.filtered.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No apps found',
+                            style: TextStyle(
+                              fontFamily: 'DM Sans',
+                              color: FGColors.textThird,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(
+                            20,
+                            0,
+                            20,
+                            40,
+                          ),
+                          itemCount: installedState.filtered.length,
+
+                          itemBuilder: (_, index) {
+                            final app =
+                                installedState.filtered[index];
+
+                            final alreadyBlocked = ref
+                                .watch(appBlockerProvider)
+                                .blockedApps
+                                .any(
+                                  (e) =>
+                                      e.packageName ==
+                                      app.packageName,
+                                );
+
+                            return Container(
+                              margin: const EdgeInsets.only(
+                                bottom: 10,
+                              ),
+
+                              decoration: BoxDecoration(
+                                color: FGColors.bg3,
+                                borderRadius: FGRadius.md,
+                                border: Border.all(
+                                  color: FGColors.border,
+                                ),
+                              ),
+
+                              child: ListTile(
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+
+                                leading: Container(
+                                  width: 48,
+                                  height: 48,
+
+                                  decoration: BoxDecoration(
+                                    color: FGColors.bg4,
+                                    borderRadius:
+                                        BorderRadius.circular(14),
+                                  ),
+
+                                  child: app.icon != null
+                                      ? ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                            12,
+                                          ),
+
+                                          child: Image.memory(
+                                            app.icon!,
+                                            fit: BoxFit.cover,
+                                            gaplessPlayback: true,
+                                          ),
+                                        )
+                                      : const Center(
+                                          child: Text(
+                                            '📱',
+                                            style: TextStyle(
+                                              fontSize: 22,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+
+                                title: Text(
+                                  app.appName,
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+
+                                  style: const TextStyle(
+                                    fontFamily: 'DM Sans',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        FGColors.textPrimary,
+                                  ),
+                                ),
+
+                                subtitle: Text(
+                                  app.packageName,
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+
+                                  style: const TextStyle(
+                                    fontFamily: 'DM Sans',
+                                    fontSize: 11,
+                                    color:
+                                        FGColors.textThird,
+                                  ),
+                                ),
+
+                                trailing: alreadyBlocked
+                                    ? Container(
+                                        padding:
+                                            const EdgeInsets
+                                                .symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+
+                                        decoration:
+                                            BoxDecoration(
+                                          color:
+                                              FGColors.redGlow,
+                                          borderRadius:
+                                              FGRadius.full,
+                                        ),
+
+                                        child: const Text(
+                                          'Blocked',
+                                          style: TextStyle(
+                                            fontFamily:
+                                                'DM Sans',
+                                            fontSize: 11,
+                                            fontWeight:
+                                                FontWeight.w600,
+                                            color:
+                                                FGColors.red,
+                                          ),
+                                        ),
+                                      )
+                                    : GestureDetector(
+                                        onTap: () async {
+                                          await ref
+                                              .read(
+                                                appBlockerProvider
+                                                    .notifier,
+                                              )
+                                              .addApp(
+                                                SuggestedApp(
+                                                  packageName:
+                                                      app.packageName,
+
+                                                  displayName:
+                                                      app.appName,
+
+                                                  iconEmoji:
+                                                      '📱',
+
+                                                  iconColor:
+                                                      FGColors
+                                                          .purple,
+
+                                                  category:
+                                                      AppCategory
+                                                          .other,
+
+                                                  icon:
+                                                      app.icon,
+                                                ),
+                                              );
+
+                                          if (mounted) {
+                                            Navigator.pop(
+                                              context,
+                                            );
+                                          }
+                                        },
+
+                                        child: Container(
+                                          padding:
+                                              const EdgeInsets
+                                                  .all(10),
+
+                                          decoration:
+                                              BoxDecoration(
+                                            color: FGColors
+                                                .purpleGlow,
+
+                                            borderRadius:
+                                                FGRadius.full,
+                                          ),
+
+                                          child: const Icon(
+                                            Icons
+                                                .add_rounded,
+                                            color:
+                                                FGColors
+                                                    .purple,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

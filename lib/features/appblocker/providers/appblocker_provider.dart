@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:focusguard/features/appblocker/models/blocked_app.dart';
+import 'dart:typed_data';
 
 const _kAppsKey   = 'fg_blocked_apps';
 const _appChannel = MethodChannel('com.focusguard/app_blocker');
@@ -74,21 +75,69 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
         jsonEncode(state.blockedApps.map(_toJson).toList()));
   }
 
+  // Map<String, dynamic> _toJson(BlockedApp a) => {
+  //   'pkg': a.packageName, 'name': a.displayName, 'cat': a.category.index,
+  //   'budget': a.dailyBudgetMinutes, 'active': a.isActive,
+  //   'used': a.minutesUsedToday, 'emoji': a.iconEmoji,
+  //   'color': a.iconColor?.value ?? 0xFF7C6FED,
+  // };
   Map<String, dynamic> _toJson(BlockedApp a) => {
-    'pkg': a.packageName, 'name': a.displayName, 'cat': a.category.index,
-    'budget': a.dailyBudgetMinutes, 'active': a.isActive,
-    'used': a.minutesUsedToday, 'emoji': a.iconEmoji,
+    'pkg': a.packageName,
+    'name': a.displayName,
+    'cat': a.category.index,
+    'budget': a.dailyBudgetMinutes,
+    'active': a.isActive,
+    'used': a.minutesUsedToday,
+    'emoji': a.iconEmoji,
     'color': a.iconColor?.value ?? 0xFF7C6FED,
+
+    // ICON BYTES
+    'icon': a.icon != null
+        ? base64Encode(a.icon!)
+        : null,
   };
 
-  BlockedApp _fromJson(Map<String, dynamic> j) => BlockedApp(
-    packageName: j['pkg'] as String, displayName: j['name'] as String,
-    category: AppCategory.values[j['cat'] as int],
-    dailyBudgetMinutes: j['budget'] as int, isActive: j['active'] as bool,
-    minutesUsedToday: (j['used'] as int?) ?? 0,
-    iconEmoji: (j['emoji'] as String?) ?? '📱',
-    iconColor: Color((j['color'] as int?) ?? 0xFF7C6FED),
-  );
+  // BlockedApp _fromJson(Map<String, dynamic> j) => BlockedApp(
+  //   packageName: j['pkg'] as String, displayName: j['name'] as String,
+  //   category: AppCategory.values[j['cat'] as int],
+  //   dailyBudgetMinutes: j['budget'] as int, isActive: j['active'] as bool,
+  //   minutesUsedToday: (j['used'] as int?) ?? 0,
+  //   iconEmoji: (j['emoji'] as String?) ?? '📱',
+  //   iconColor: Color((j['color'] as int?) ?? 0xFF7C6FED),
+  // );
+
+  BlockedApp _fromJson(Map<String, dynamic> j) {
+    Uint8List? iconBytes;
+
+    try {
+      final rawIcon = j['icon'];
+
+      if (rawIcon != null && rawIcon is String) {
+        iconBytes = base64Decode(rawIcon);
+      }
+    } catch (_) {}
+
+    return BlockedApp(
+      packageName: j['pkg'] as String,
+      displayName: j['name'] as String,
+
+      category: AppCategory.values[j['cat'] as int],
+
+      dailyBudgetMinutes: j['budget'] as int,
+
+      isActive: j['active'] as bool,
+
+      minutesUsedToday: (j['used'] as int?) ?? 0,
+
+      iconEmoji: (j['emoji'] as String?) ?? '📱',
+
+      iconColor: Color(
+        (j['color'] as int?) ?? 0xFF7C6FED,
+      ),
+
+      icon: iconBytes,
+    );
+  }
 
   // ── PERMISSIONS ─────────────────────────────────────────────────
   Future<void> _checkA11y() async {
@@ -120,10 +169,23 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
   // ── CRUD ────────────────────────────────────────────────────────
   Future<void> addApp(SuggestedApp s, {int budgetMinutes = 0}) async {
     if (state.blockedApps.any((a) => a.packageName == s.packageName)) return;
+    // final app = BlockedApp(
+    //   packageName: s.packageName, displayName: s.displayName,
+    //   category: s.category, dailyBudgetMinutes: budgetMinutes,
+    //   isActive: true, iconEmoji: s.iconEmoji, iconColor: s.iconColor,
+    // );
     final app = BlockedApp(
-      packageName: s.packageName, displayName: s.displayName,
-      category: s.category, dailyBudgetMinutes: budgetMinutes,
-      isActive: true, iconEmoji: s.iconEmoji, iconColor: s.iconColor,
+      packageName: s.packageName,
+      displayName: s.displayName,
+      category: s.category,
+      dailyBudgetMinutes: budgetMinutes,
+      isActive: true,
+
+      iconEmoji: s.iconEmoji,
+      iconColor: s.iconColor,
+
+      // REAL APP ICON
+      icon: s.icon,
     );
     state = state.copyWith(blockedApps: [...state.blockedApps, app]);
     await _save();
