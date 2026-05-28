@@ -18,7 +18,6 @@ class AppBlockerScreen extends ConsumerWidget {
       backgroundColor: isDark ? FGColors.bg : FGColorsLight.bg,
       body: SafeArea(
         child: Column(children: [
-          // ── TOP BAR ──
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
             child: Row(children: [
@@ -31,7 +30,6 @@ class AppBlockerScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.bodySmall),
                 ],
               )),
-              // Add app button
               GestureDetector(
                 onTap: () => _showAddSheet(context),
                 child: Container(
@@ -60,11 +58,9 @@ class AppBlockerScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── PERMISSION BANNERS ──
                         if (!state.a11yGranted)
                           _PermissionBanners(state: state),
 
-                        // ── BLOCKED APPS ──
                         if (state.blockedApps.isNotEmpty) ...[
                           const FGSectionLabel('Blocked apps', topPad: 4),
                           ...state.blockedApps.map(
@@ -72,7 +68,6 @@ class AppBlockerScreen extends ConsumerWidget {
                         ] else
                           const _EmptyBlockedState(),
 
-                        // ── HOW IT WORKS ──
                         const FGSectionLabel('How it works', topPad: 4),
                         _HowItWorksCard(),
                       ],
@@ -242,7 +237,6 @@ class _AppRow extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             child: Row(children: [
-              // App icon circle
               Container(
                 width: 44, height: 44,
                 decoration: BoxDecoration(
@@ -251,9 +245,6 @@ class _AppRow extends ConsumerWidget {
                   border: Border.all(
                     color: (app.iconColor ?? FGColors.border).withOpacity(0.3)),
                 ),
-                // child: Center(
-                //   child: Text(app.iconEmoji,
-                //     style: const TextStyle(fontSize: 22))),
                 child: Center(
                   child: app.icon != null
                       ? ClipRRect(
@@ -274,7 +265,6 @@ class _AppRow extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
 
-              // Info
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -307,7 +297,6 @@ class _AppRow extends ConsumerWidget {
                 ],
               )),
 
-              // Toggle
               Switch(
                 value: app.isActive,
                 onChanged: (_) => notifier.toggleApp(app.packageName),
@@ -315,7 +304,6 @@ class _AppRow extends ConsumerWidget {
             ]),
           ),
 
-          // Budget progress (only when time-limited)
           if (!app.isAlwaysBlocked)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
@@ -368,237 +356,7 @@ class _AppRow extends ConsumerWidget {
       };
 }
 
-// ── ADD APP SHEET ────────────────────────────
-// User types an app name — we search our lookup table.
-// If not found, we show a "not found" message with a note to contact support.
-
-// Comprehensive name → package lookup (case-insensitive)
-// const _kAppLookup = {
-//   // Social
-//   'instagram':       ('com.instagram.android',            'Instagram',        '📸'),
-//   'facebook':        ('com.facebook.katana',              'Facebook',         '📘'),
-//   'x':               ('com.twitter.android',              'Twitter / X',      '𝕏'),
-//   'snapchat':        ('com.snapchat.android',             'Snapchat',         '👻'),
-//   'reddit':          ('com.reddit.frontpage',             'Reddit',           '🟠'),
-//   'pinterest':       ('com.pinterest',                    'Pinterest',         '📌'),
-//   'linkedin':        ('com.linkedin.android',             'LinkedIn',         '💼'),
-//   'sharechat':       ('com.sharechat.sharechat',          'ShareChat',        '📱'),
-//   // Short-form video
-//   'tiktok':          ('com.zhiliaoapp.musically',         'TikTok',           '🎵'),
-//   'youtube':         ('com.google.android.youtube',       'YouTube',          '▶️'),
-//   'josh':            ('com.joshapp.android',              'Josh',             '🎬'),
-//   'moj':             ('com.moj.app',                      'Moj',              '🎭'),
-//   'mx takatak':      ('com.mxtakatak',                    'MX TakaTak',       '🎵'),
-//   'youtube shorts':  ('com.google.android.youtube',       'YouTube',          '▶️'),
-//   'shorts':          ('com.google.android.youtube',       'YouTube',          '▶️'),
-//   // Messaging
-//   'whatsapp':        ('com.whatsapp',                     'WhatsApp',         '💬'),
-//   'telegram':        ('com.telegram.messenger',           'Telegram',         '✈️'),
-//   'discord':         ('com.discord',                      'Discord',          '💬'),
-//   'signal':          ('org.thoughtcrime.securesms',       'Signal',           '🔒'),
-//   'messenger':       ('com.facebook.orca',                'Messenger',        '💬'),
-//   // Entertainment / streaming
-//   'netflix':         ('com.netflix.mediaclient',          'Netflix',          '🎬'),
-//   'hotstar':         ('com.jiohotstar',                      'JioHotstar',          '⭐'),
-//   'prime video':     ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
-//   'amazon prime':    ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
-//   'prime':           ('com.amazon.avod.thirdpartyclient', 'Prime Video',      '🎥'),
-//   'zee5':            ('com.zee5.android',                 'ZEE5',             '📺'),
-//   'jiocinema':       ('com.jio.media.jioplay',            'JioCinema',        '🎞️'),
-//   'spotify':         ('com.spotify.music',                'Spotify',          '🎵'),
-//   'mx player':       ('com.mxtech.videoplayer.ad',        'MX Player',        '▶️'),
-//   'mx':              ('com.mxtech.videoplayer.ad',        'MX Player',        '▶️'),
-//   // Gaming
-//   'bgmi':            ('com.pubg.imobile',                 'BGMI',             '🎮'),
-//   'pubg':            ('com.pubg.imobile',                 'BGMI',             '🎮'),
-//   'free fire':       ('com.dts.freefireth',               'Free Fire',        '🔥'),
-//   'freefire':        ('com.dts.freefireth',               'Free Fire',        '🔥'),
-//   'clash of clans':  ('com.supercell.clashofclans',       'Clash of Clans',   '⚔️'),
-//   'coc':             ('com.supercell.clashofclans',       'Clash of Clans',   '⚔️'),
-//   'clash royale':    ('com.supercell.clashroyale',        'Clash Royale',     '🃏'),
-//   'roblox':          ('com.roblox.client',                'Roblox',           '🎮'),
-//   'minecraft':       ('com.mojang.minecraftpe',           'Minecraft',        '⛏️'),
-//   'cod':             ('com.activision.callofduty.shooter','COD Mobile',       '🔫'),
-//   'call of duty':    ('com.activision.callofduty.shooter','COD Mobile',       '🔫'),
-//   'genshin':         ('com.miHoYo.GenshinImpact',        'Genshin Impact',   '🌟'),
-// };
-
-
-
-// class _AddAppSheet extends ConsumerStatefulWidget {
-//   const _AddAppSheet();
-//   @override ConsumerState<_AddAppSheet> createState() => _AddAppSheetState();
-// }
-
-// class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
-//   final _searchCtrl = TextEditingController();
-//   (String, String, String)? _found;   // (packageName, displayName, emoji)
-//   bool _notFound  = false;
-//   bool _adding    = false;
-
-//   @override void dispose() { _searchCtrl.dispose(); super.dispose(); }
-
-//   void _onChanged(String query) {
-//     final q = query.trim().toLowerCase();
-//     if (q.isEmpty) { setState(() { _found = null; _notFound = false; }); return; }
-//     final match = _kAppLookup[q];
-//     setState(() {
-//       _found    = match;
-//       _notFound = match == null && q.length >= 3;
-//     });
-//   }
-
-//   Future<void> _add() async {
-//     if (_found == null) return;
-//     final (pkg, name, emoji) = _found!;
-//     final already = ref.read(appBlockerProvider).blockedApps.any((a) => a.packageName == pkg);
-//     if (already) { Navigator.pop(context); return; }
-//     setState(() => _adding = true);
-//     await ref.read(appBlockerProvider.notifier).addApp(SuggestedApp(
-//       packageName: pkg, displayName: name, iconEmoji: emoji,
-//       iconColor: const Color(0xFF7C6FED), category: AppCategory.other,icon: iconBytes,
-//     ));
-//     setState(() => _adding = false);
-//     if (mounted) Navigator.pop(context);
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final isDark = Theme.of(context).brightness == Brightness.dark;
-//     final bottom = MediaQuery.of(context).viewInsets.bottom;
-//     final bg2  = isDark ? FGColors.bg2  : FGColorsLight.bg2;
-//     final bg3  = isDark ? FGColors.bg3  : FGColorsLight.bg3;
-//     final bg4  = isDark ? FGColors.bg4  : FGColorsLight.bg4;
-//     final b2   = isDark ? FGColors.border2 : FGColorsLight.border2;
-//     final b    = isDark ? FGColors.border  : FGColorsLight.border;
-//     final tp   = isDark ? FGColors.textPrimary : FGColorsLight.textPrimary;
-//     final ts   = isDark ? FGColors.textSecond  : FGColorsLight.textSecond;
-//     final tt   = isDark ? FGColors.textThird   : FGColorsLight.textThird;
-//     final p    = isDark ? FGColors.purple      : FGColorsLight.purple;
-//     final teal = isDark ? FGColors.teal        : FGColorsLight.teal;
-//     final red  = isDark ? FGColors.red         : FGColorsLight.red;
-//     final blocked = ref.watch(appBlockerProvider).blockedApps.map((a) => a.packageName).toSet();
-
-//     return ConstrainedBox(
-//       constraints: BoxConstraints(
-//         maxHeight: MediaQuery.of(context).size.height * 0.92,
-//       ),
-//       child: Container(
-//       decoration: BoxDecoration(
-//         color: bg2,
-//         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-//         border: Border(top: BorderSide(color: b2))),
-//       padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottom),
-//       child: SingleChildScrollView(
-//         physics: const ClampingScrollPhysics(),
-//         child: Column(mainAxisSize: MainAxisSize.min, children: [
-//         Center(child: Container(width: 40, height: 4,
-//           decoration: BoxDecoration(color: b2, borderRadius: FGRadius.full))),
-//         const SizedBox(height: 20),
-//         Text('Block an app', style: TextStyle(fontFamily: 'Syne',
-//           fontSize: 18, fontWeight: FontWeight.w700, color: tp)),
-//         const SizedBox(height: 4),
-//         Text('Type the app name to find and block it.',
-//           style: TextStyle(fontFamily: 'DM Sans', fontSize: 12, color: ts)),
-//         const SizedBox(height: 18),
-
-//         // Search field
-//         TextField(
-//           controller: _searchCtrl,
-//           autofocus: true,
-//           onChanged: _onChanged,
-//           style: TextStyle(fontFamily: 'DM Sans', fontSize: 14, color: tp),
-//           cursorColor: p,
-//           decoration: InputDecoration(
-//             hintText: 'e.g.  Netflix  or  Free Fire  or  Hotstar',
-//             hintStyle: TextStyle(color: tt, fontSize: 13),
-//             filled: true, fillColor: bg4,
-//             prefixIcon: Icon(Icons.search_rounded, color: tt, size: 20),
-//             suffixIcon: _searchCtrl.text.isNotEmpty
-//               ? GestureDetector(
-//                   onTap: () { _searchCtrl.clear(); setState(() { _found = null; _notFound = false; }); },
-//                   child: Icon(Icons.clear_rounded, color: tt, size: 18))
-//               : null,
-//             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-//             border: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: b2)),
-//             enabledBorder: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: b2)),
-//             focusedBorder: OutlineInputBorder(borderRadius: FGRadius.md, borderSide: BorderSide(color: p, width: 1.5)))),
-//         const SizedBox(height: 12),
-
-//         // Result
-//         if (_found != null) ...[
-//           () {
-//             final (pkg, name, emoji) = _found!;
-//             final alreadyBlocked = blocked.contains(pkg);
-//             return Container(
-//               padding: const EdgeInsets.all(14),
-//               decoration: BoxDecoration(
-//                 color: alreadyBlocked ? bg3 : teal.withOpacity(0.08),
-//                 borderRadius: FGRadius.md,
-//                 border: Border.all(color: alreadyBlocked ? b : teal.withOpacity(0.3))),
-//               child: Row(children: [
-//                 Text(emoji, style: const TextStyle(fontSize: 24)),
-//                 const SizedBox(width: 12),
-//                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-//                   Text(name, style: TextStyle(fontFamily: 'DM Sans',
-//                     fontSize: 14, fontWeight: FontWeight.w600, color: tp)),
-//                   Text(alreadyBlocked ? 'Already blocked' : 'Found — tap to block',
-//                     style: TextStyle(fontFamily: 'DM Sans', fontSize: 11,
-//                       color: alreadyBlocked ? tt : teal)),
-//                 ])),
-//                 if (!alreadyBlocked)
-//                   Icon(Icons.check_circle_outline_rounded, color: teal, size: 20),
-//               ]));
-//           }(),
-//           const SizedBox(height: 12),
-//           if (!blocked.contains(_found!.$1))
-//             FGButton(label: 'Block ${_found!.$2}', icon: Icons.block_rounded,
-//               loading: _adding, onTap: _add),
-//         ] else if (_notFound) ...[
-//           _ManualPkgEntry(searchName: _searchCtrl.text.trim()),
-//         ],
-
-//         const SizedBox(height: 16),
-//         Divider(height: 1, color: b),
-//         const SizedBox(height: 14),
-
-//         // Popular quick picks (not yet blocked)
-//         Text('Popular', style: TextStyle(fontFamily: 'Syne',
-//           fontSize: 13, fontWeight: FontWeight.w700, color: tp)),
-//         const SizedBox(height: 10),
-//         Wrap(spacing: 8, runSpacing: 8, children: [
-//           for (final entry in _kAppLookup.entries.take(16))
-//             if (!blocked.contains(entry.value.$1))
-//               GestureDetector(
-//                 onTap: () async {
-//                   final (pkg, name, emoji) = entry.value;
-//                   setState(() => _adding = true);
-//                   await ref.read(appBlockerProvider.notifier).addApp(SuggestedApp(
-//                     packageName: pkg, displayName: name, iconEmoji: emoji,
-//                     iconColor: const Color(0xFF7C6FED), category: AppCategory.other));
-//                   setState(() => _adding = false);
-//                   if (mounted) Navigator.pop(context);
-//                 },
-//                 child: Container(
-//                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-//                   decoration: BoxDecoration(color: bg3, borderRadius: FGRadius.full,
-//                     border: Border.all(color: b)),
-//                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-//                     Text(entry.value.$3, style: const TextStyle(fontSize: 13)),
-//                     const SizedBox(width: 5),
-//                     Text(entry.value.$2, style: TextStyle(fontFamily: 'DM Sans',
-//                       fontSize: 12, fontWeight: FontWeight.w500, color: ts)),
-//                   ]))),
-//         ]),
-//        ],
-//       ), 
-//      ),
-//      ),
-//      );
-//   }
-// }
-
-
+// ── ADD APP SHEET WITH TIME LIMIT SELECTOR ────────────────────────────
 class _AddAppSheet extends ConsumerStatefulWidget {
   const _AddAppSheet();
 
@@ -608,11 +366,13 @@ class _AddAppSheet extends ConsumerStatefulWidget {
 
 class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
   final TextEditingController _searchCtrl = TextEditingController();
+  
+  int _budgetMinutes = 30;
+  bool _useTimeLimit = true;
 
   @override
   void initState() {
     super.initState();
-
     Future.microtask(() {
       ref.read(installedAppsProvider.notifier).loadApps();
     });
@@ -627,26 +387,26 @@ class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
   @override
   Widget build(BuildContext context) {
     final installedState = ref.watch(installedAppsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = isDark ? FGColors.purple : FGColorsLight.purple;
+    final bg3 = isDark ? FGColors.bg3 : FGColorsLight.bg3;
+    final bg4 = isDark ? FGColors.bg4 : FGColorsLight.bg4;
+    final b2 = isDark ? FGColors.border2 : FGColorsLight.border2;
+    final ts = isDark ? FGColors.textSecond : FGColorsLight.textSecond;
+    final tt = isDark ? FGColors.textThird : FGColorsLight.textThird;
+    final tp = isDark ? FGColors.textPrimary : FGColorsLight.textPrimary;
 
     return Container(
       decoration: const BoxDecoration(
         color: FGColors.bg2,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
-        border: Border(
-          top: BorderSide(
-            color: FGColors.border2,
-          ),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: FGColors.border2)),
       ),
-
       child: SafeArea(
         top: false,
         child: Column(
           children: [
             const SizedBox(height: 14),
-
             Center(
               child: Container(
                 width: 42,
@@ -657,9 +417,7 @@ class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
@@ -674,64 +432,101 @@ class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
                       color: FGColors.textPrimary,
                     ),
                   ),
-
                   const SizedBox(height: 6),
-
                   const Text(
-                    'Search apps installed on your device.',
+                    'Select an app below to block it with a daily time limit.',
                     style: TextStyle(
                       fontFamily: 'DM Sans',
                       fontSize: 12,
                       color: FGColors.textThird,
                     ),
                   ),
-
                   const SizedBox(height: 18),
-
                   TextField(
                     controller: _searchCtrl,
                     onChanged: (v) {
-                      ref
-                          .read(installedAppsProvider.notifier)
-                          .search(v);
+                      ref.read(installedAppsProvider.notifier).search(v);
                     },
-                    style: const TextStyle(
-                      color: FGColors.textPrimary,
-                    ),
+                    style: const TextStyle(color: FGColors.textPrimary),
                     decoration: InputDecoration(
                       hintText: 'Search installed apps...',
-                      hintStyle: const TextStyle(
-                        color: FGColors.textThird,
-                      ),
-
-                      prefixIcon: const Icon(
-                        Icons.search_rounded,
-                        color: FGColors.textThird,
-                      ),
-
+                      hintStyle: const TextStyle(color: FGColors.textThird),
+                      prefixIcon: const Icon(Icons.search_rounded, color: FGColors.textThird),
                       filled: true,
                       fillColor: FGColors.bg4,
-
                       border: OutlineInputBorder(
                         borderRadius: FGRadius.md,
                         borderSide: BorderSide.none,
                       ),
-
                       enabledBorder: OutlineInputBorder(
                         borderRadius: FGRadius.md,
                         borderSide: BorderSide.none,
                       ),
-
                       focusedBorder: OutlineInputBorder(
                         borderRadius: FGRadius.md,
-                        borderSide: const BorderSide(
-                          color: FGColors.purple,
-                          width: 1.3,
-                        ),
+                        borderSide: const BorderSide(color: FGColors.purple, width: 1.3),
                       ),
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── TIME LIMIT SELECTOR ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _useTimeLimit ? p.withOpacity(0.08) : bg3,
+                  borderRadius: FGRadius.md,
+                  border: Border.all(color: _useTimeLimit ? p.withOpacity(0.3) : b2),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Icon(Icons.timer_outlined,
+                      color: _useTimeLimit ? (isDark ? FGColors.purpleLight : FGColorsLight.purpleLight) : tt,
+                      size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Set daily time limit',
+                        style: TextStyle(fontFamily: 'DM Sans', fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _useTimeLimit ? (isDark ? FGColors.purpleLight : FGColorsLight.purpleLight) : tp)),
+                      Text(_useTimeLimit
+                          ? 'Block after $_budgetMinutes min/day'
+                          : 'Off — always blocked',
+                        style: TextStyle(fontFamily: 'DM Sans', fontSize: 11, color: tt)),
+                    ])),
+                    Switch(
+                      value: _useTimeLimit,
+                      onChanged: (v) => setState(() {
+                        _useTimeLimit = v;
+                        if (v && _budgetMinutes == 0) _budgetMinutes = 30;
+                      })),
+                  ]),
+                  if (_useTimeLimit) ...[
+                    const SizedBox(height: 12),
+                    Wrap(spacing: 8, runSpacing: 8,
+                      children: [15, 30, 60, 90, 120, 180].map((m) {
+                        final active = _budgetMinutes == m;
+                        return GestureDetector(
+                          onTap: () => setState(() => _budgetMinutes = m),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: active ? p : bg4,
+                              borderRadius: FGRadius.full,
+                              border: Border.all(color: active ? p : b2)),
+                            child: Text(m >= 60 ? '${m ~/ 60}h' : '${m}min',
+                              style: TextStyle(fontFamily: 'DM Sans', fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: active ? Colors.white : ts))));
+                      }).toList()),
+                  ],
+                ]),
               ),
             ),
 
@@ -739,214 +534,107 @@ class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
 
             Expanded(
               child: installedState.loading
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    )
+                  ? const Center(child: CircularProgressIndicator())
                   : installedState.filtered.isEmpty
                       ? const Center(
                           child: Text(
                             'No apps found',
-                            style: TextStyle(
-                              fontFamily: 'DM Sans',
-                              color: FGColors.textThird,
-                            ),
+                            style: TextStyle(fontFamily: 'DM Sans', color: FGColors.textThird),
                           ),
                         )
                       : ListView.builder(
                           physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(
-                            20,
-                            0,
-                            20,
-                            40,
-                          ),
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
                           itemCount: installedState.filtered.length,
-
                           itemBuilder: (_, index) {
-                            final app =
-                                installedState.filtered[index];
-
-                            final alreadyBlocked = ref
-                                .watch(appBlockerProvider)
-                                .blockedApps
-                                .any(
-                                  (e) =>
-                                      e.packageName ==
-                                      app.packageName,
-                                );
+                            final app = installedState.filtered[index];
+                            final alreadyBlocked = ref.watch(appBlockerProvider).blockedApps.any(
+                              (e) => e.packageName == app.packageName,
+                            );
 
                             return Container(
-                              margin: const EdgeInsets.only(
-                                bottom: 10,
-                              ),
-
+                              margin: const EdgeInsets.only(bottom: 10),
                               decoration: BoxDecoration(
                                 color: FGColors.bg3,
                                 borderRadius: FGRadius.md,
-                                border: Border.all(
-                                  color: FGColors.border,
-                                ),
+                                border: Border.all(color: FGColors.border),
                               ),
-
                               child: ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
-                                ),
-
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 leading: Container(
                                   width: 48,
                                   height: 48,
-
                                   decoration: BoxDecoration(
                                     color: FGColors.bg4,
-                                    borderRadius:
-                                        BorderRadius.circular(14),
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
-
                                   child: app.icon != null
                                       ? ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                            12,
-                                          ),
-
-                                          child: Image.memory(
-                                            app.icon!,
-                                            fit: BoxFit.cover,
-                                            gaplessPlayback: true,
-                                          ),
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.memory(app.icon!, fit: BoxFit.cover, gaplessPlayback: true),
                                         )
-                                      : const Center(
-                                          child: Text(
-                                            '📱',
-                                            style: TextStyle(
-                                              fontSize: 22,
-                                            ),
-                                          ),
-                                        ),
+                                      : const Center(child: Text('📱', style: TextStyle(fontSize: 22))),
                                 ),
-
                                 title: Text(
                                   app.appName,
                                   maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontFamily: 'DM Sans',
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color:
-                                        FGColors.textPrimary,
+                                    color: FGColors.textPrimary,
                                   ),
                                 ),
-
                                 subtitle: Text(
                                   app.packageName,
                                   maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-
+                                  overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontFamily: 'DM Sans',
                                     fontSize: 11,
-                                    color:
-                                        FGColors.textThird,
+                                    color: FGColors.textThird,
                                   ),
                                 ),
-
                                 trailing: alreadyBlocked
                                     ? Container(
-                                        padding:
-                                            const EdgeInsets
-                                                .symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: FGColors.redGlow,
+                                          borderRadius: FGRadius.full,
                                         ),
-
-                                        decoration:
-                                            BoxDecoration(
-                                          color:
-                                              FGColors.redGlow,
-                                          borderRadius:
-                                              FGRadius.full,
-                                        ),
-
                                         child: const Text(
                                           'Blocked',
                                           style: TextStyle(
-                                            fontFamily:
-                                                'DM Sans',
+                                            fontFamily: 'DM Sans',
                                             fontSize: 11,
-                                            fontWeight:
-                                                FontWeight.w600,
-                                            color:
-                                                FGColors.red,
+                                            fontWeight: FontWeight.w600,
+                                            color: FGColors.red,
                                           ),
                                         ),
                                       )
                                     : GestureDetector(
                                         onTap: () async {
-                                          await ref
-                                              .read(
-                                                appBlockerProvider
-                                                    .notifier,
-                                              )
-                                              .addApp(
-                                                SuggestedApp(
-                                                  packageName:
-                                                      app.packageName,
-
-                                                  displayName:
-                                                      app.appName,
-
-                                                  iconEmoji:
-                                                      '📱',
-
-                                                  iconColor:
-                                                      FGColors
-                                                          .purple,
-
-                                                  category:
-                                                      AppCategory
-                                                          .other,
-
-                                                  icon:
-                                                      app.icon,
-                                                ),
-                                              );
-
-                                          if (mounted) {
-                                            Navigator.pop(
-                                              context,
-                                            );
-                                          }
+                                          await ref.read(appBlockerProvider.notifier).addApp(
+                                            SuggestedApp(
+                                              packageName: app.packageName,
+                                              displayName: app.appName,
+                                              iconEmoji: '📱',
+                                              iconColor: FGColors.purple,
+                                              category: AppCategory.other,
+                                              icon: app.icon,
+                                            ),
+                                            budgetMinutes: _useTimeLimit ? _budgetMinutes : 0,
+                                          );
+                                          if (mounted) Navigator.pop(context);
                                         },
-
                                         child: Container(
-                                          padding:
-                                              const EdgeInsets
-                                                  .all(10),
-
-                                          decoration:
-                                              BoxDecoration(
-                                            color: FGColors
-                                                .purpleGlow,
-
-                                            borderRadius:
-                                                FGRadius.full,
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: FGColors.purpleGlow,
+                                            borderRadius: FGRadius.full,
                                           ),
-
-                                          child: const Icon(
-                                            Icons
-                                                .add_rounded,
-                                            color:
-                                                FGColors
-                                                    .purple,
-                                            size: 20,
-                                          ),
+                                          child: const Icon(Icons.add_rounded, color: FGColors.purple, size: 20),
                                         ),
                                       ),
                               ),
@@ -961,8 +649,7 @@ class _AddAppSheetState extends ConsumerState<_AddAppSheet> {
   }
 }
 
-
-// ── MANUAL PACKAGE ENTRY (fallback when app not in lookup) ──────────
+// ── MANUAL PACKAGE ENTRY ──────────────────────────
 class _ManualPkgEntry extends ConsumerStatefulWidget {
   const _ManualPkgEntry({required this.searchName});
   final String searchName;
@@ -981,13 +668,16 @@ class _ManualPkgEntryState extends ConsumerState<_ManualPkgEntry> {
     if (pkg.isEmpty) { setState(() => _error = 'Enter the package name.'); return; }
     if (!pkg.contains('.')) { setState(() => _error = 'Must contain a dot. E.g. com.hotstar'); return; }
     setState(() { _adding = true; _error = null; });
-    await ref.read(appBlockerProvider.notifier).addApp(SuggestedApp(
-      packageName: pkg,
-      displayName: widget.searchName.isNotEmpty ? widget.searchName : pkg.split('.').last,
-      iconEmoji: '📱',
-      iconColor: const Color(0xFF7C6FED),
-      category: AppCategory.other,
-    ));
+    await ref.read(appBlockerProvider.notifier).addApp(
+      SuggestedApp(
+        packageName: pkg,
+        displayName: widget.searchName.isNotEmpty ? widget.searchName : pkg.split('.').last,
+        iconEmoji: '📱',
+        iconColor: const Color(0xFF7C6FED),
+        category: AppCategory.other,
+      ),
+      budgetMinutes: 0,
+    );
     setState(() => _adding = false);
     if (mounted) Navigator.pop(context);
   }
@@ -1059,6 +749,7 @@ class _ManualPkgEntryState extends ConsumerState<_ManualPkgEntry> {
   }
 }
 
+// ── BUDGET SHEET ─────────────────────────────────
 class _BudgetSheet extends StatefulWidget {
   const _BudgetSheet({required this.app, required this.ref});
   final BlockedApp app;
@@ -1079,6 +770,13 @@ class _BudgetSheetState extends State<_BudgetSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = isDark ? FGColors.purple : FGColorsLight.purple;
+    final bg3 = isDark ? FGColors.bg3 : FGColorsLight.bg3;
+    final bg4 = isDark ? FGColors.bg4 : FGColorsLight.bg4;
+    final b2 = isDark ? FGColors.border2 : FGColorsLight.border2;
+    final ts = isDark ? FGColors.textSecond : FGColorsLight.textSecond;
+
     return Container(
       decoration: const BoxDecoration(
         color: FGColors.bg2,
@@ -1099,33 +797,81 @@ class _BudgetSheetState extends State<_BudgetSheet> {
           Text('Edit daily limit — ${widget.app.displayName}',
             style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: [0, 15, 30, 60, 90, 120].map((mins) {
-              final active = _budget == mins;
-              return GestureDetector(
-                onTap: () => setState(() => _budget = mins),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: active ? FGColors.purple : FGColors.bg4,
-                    borderRadius: FGRadius.full,
-                    border: Border.all(
-                      color: active ? FGColors.purple : FGColors.border2),
-                  ),
-                  child: Text(
-                    mins == 0 ? 'Always block' : '$mins min/day',
-                    style: TextStyle(
-                      fontFamily: 'DM Sans', fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: active ? Colors.white : FGColors.textSecond,
-                    )),
-                ),
-              );
-            }).toList(),
+          
+          GestureDetector(
+            onTap: () => setState(() => _budget = 0),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: _budget == 0 ? p.withOpacity(0.08) : bg3,
+                borderRadius: FGRadius.md,
+                border: Border.all(color: _budget == 0 ? p : b2),
+              ),
+              child: Row(children: [
+                Icon(Icons.block_rounded, color: _budget == 0 ? p : FGColors.textThird, size: 20),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Always block',
+                  style: TextStyle(fontFamily: 'DM Sans', fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _budget == 0 ? p : FGColors.textPrimary))),
+                if (_budget == 0)
+                  Icon(Icons.check_circle, color: p, size: 20),
+              ]),
+            ),
           ),
+          
+          GestureDetector(
+            onTap: () => setState(() { if (_budget == 0) _budget = 30; }),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: _budget > 0 ? p.withOpacity(0.08) : bg3,
+                borderRadius: FGRadius.md,
+                border: Border.all(color: _budget > 0 ? p : b2),
+              ),
+              child: Row(children: [
+                Icon(Icons.timer_outlined, color: _budget > 0 ? p : FGColors.textThird, size: 20),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Time limit',
+                  style: TextStyle(fontFamily: 'DM Sans', fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _budget > 0 ? p : FGColors.textPrimary))),
+                if (_budget > 0)
+                  Icon(Icons.check_circle, color: p, size: 20),
+              ]),
+            ),
+          ),
+          
+          if (_budget > 0) ...[
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: [15, 30, 60, 90, 120, 180].map((mins) {
+                final active = _budget == mins;
+                return GestureDetector(
+                  onTap: () => setState(() => _budget = mins),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: active ? p : bg4,
+                      borderRadius: FGRadius.full,
+                      border: Border.all(color: active ? p : b2),
+                    ),
+                    child: Text(
+                      mins >= 60 ? '${mins ~/ 60}h' : '$mins min',
+                      style: TextStyle(
+                        fontFamily: 'DM Sans', fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: active ? Colors.white : ts,
+                      )),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          
           const SizedBox(height: 24),
           FGButton(
             label: 'Save',
@@ -1152,8 +898,6 @@ class _HowItWorksCard extends StatelessWidget {
         _Step(n: '2', text: 'When you open a blocked app, it\'s detected instantly using Usage Stats.'),
         const SizedBox(height: 10),
         _Step(n: '3', text: 'Stay Off overlays a focus reminder — no root needed.'),
-        // const SizedBox(height: 10),
-        // _Step(n: '4', text: 'Time-limited apps auto-block when your daily budget runs out.'),
       ]),
     );
   }

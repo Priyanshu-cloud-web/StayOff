@@ -923,11 +923,10 @@ class _BlocklistScreenState extends ConsumerState<BlocklistScreen>
     if (state == AppLifecycleState.paused)  _stopSync();
   }
 
-  // ✅ CHANGED: Sync every 60 seconds instead of 10 (better battery)
   void _startSync() {
     _usageTimer?.cancel();
     ref.read(blocklistProvider.notifier).syncUsage();
-    _usageTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+    _usageTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       ref.read(blocklistProvider.notifier).syncUsage();
     });
   }

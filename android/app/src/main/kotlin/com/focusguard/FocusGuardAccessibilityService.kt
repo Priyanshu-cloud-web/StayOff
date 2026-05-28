@@ -27,8 +27,6 @@ class FocusGuardAccessibilityService : AccessibilityService() {
         const val KEY_ALWAYS_BLOCK_SHORTS = "always_block_yt_shorts"
         const val KEY_BLOCK_REELS = "block_ig_reels"
         const val KEY_ALWAYS_BLOCK_REELS = "always_block_ig_reels"
-        const val KEY_BLOCK_TIKTOK = "block_tiktok"
-        const val KEY_BLOCK_SNAP = "block_snap_spotlight"
         const val KEY_BLOCKED_PKGS = "blocked_app_pkgs"
         const val KEY_APP_BUDGETS = "blocked_app_budgets"
         const val KEY_DAILY_USAGE = "fg_daily_usage"
@@ -46,11 +44,10 @@ class FocusGuardAccessibilityService : AccessibilityService() {
 
     private var isBlocking = false
     private var lastBlockTime = 0L
-    private var currentApp = ""
+    private var currentForegroundApp = ""
     
     private var isInShorts = false
     private var isInReels = false
-    
     private var lastShortsBlockTime = 0L
     private var lastReelsBlockTime = 0L
     
@@ -66,22 +63,21 @@ class FocusGuardAccessibilityService : AccessibilityService() {
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
-        setupService()
+        setupAccessibilityConfig()
         createNotificationChannel()
         loadAllData()
         checkDailyReset()
         startSessionSaver()
         
-        val alwaysBlockShorts = prefs.getBoolean(KEY_ALWAYS_BLOCK_SHORTS, false)
-        val shortsBudget = getShortsBudget()
-        
         Log.d(TAG, "✅ Service connected")
-        Log.d(TAG, "   Shorts blocking enabled: ${prefs.getBoolean(KEY_BLOCK_SHORTS, false)}")
-        Log.d(TAG, "   Always block shorts: $alwaysBlockShorts")
-        Log.d(TAG, "   Shorts budget: $shortsBudget minutes")
+        Log.d(TAG, "   Blocked apps: $blockedPackages")
+        Log.d(TAG, "   App budgets: $appBudgets")
+        Log.d(TAG, "   Shorts blocking: ${prefs.getBoolean(KEY_BLOCK_SHORTS, false)}")
+        Log.d(TAG, "   Always block shorts: ${prefs.getBoolean(KEY_ALWAYS_BLOCK_SHORTS, false)}")
+        Log.d(TAG, "   Shorts budget: ${getShortsBudget()}")
     }
     
-    private fun setupService() {
+    private fun setupAccessibilityConfig() {
         serviceInfo = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
                         AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
@@ -90,7 +86,8 @@ class FocusGuardAccessibilityService : AccessibilityService() {
             flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                     AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
             
-            notificationTimeout = 100
+            notificationTimeout = 50
+            packageNames = null
         }
     }
     
@@ -111,25 +108,33 @@ class FocusGuardAccessibilityService : AccessibilityService() {
     private fun loadAllData() {
         val pkgsRaw = prefs.getString(KEY_BLOCKED_PKGS, "") ?: ""
         blockedPackages.clear()
-        blockedPackages.addAll(pkgsRaw.split(",").filter { it.isNotEmpty() })
+        if (pkgsRaw.isNotEmpty()) {
+            blockedPackages.addAll(pkgsRaw.split(",").filter { it.isNotEmpty() })
+        }
         
         val budgetsRaw = prefs.getString(KEY_APP_BUDGETS, "") ?: ""
         appBudgets.clear()
-        budgetsRaw.split(",").forEach {
-            val parts = it.split(":")
-            if (parts.size == 2) {
-                appBudgets[parts[0]] = parts[1].toIntOrNull() ?: 0
+        if (budgetsRaw.isNotEmpty()) {
+            budgetsRaw.split(",").forEach {
+                val parts = it.split(":")
+                if (parts.size == 2) {
+                    appBudgets[parts[0]] = parts[1].toIntOrNull() ?: 0
+                }
             }
         }
         
         val usageRaw = prefs.getString(KEY_DAILY_USAGE, "") ?: ""
         dailyUsage.clear()
-        usageRaw.split(",").forEach {
-            val parts = it.split(":")
-            if (parts.size == 2) {
-                dailyUsage[parts[0]] = parts[1].toIntOrNull() ?: 0
+        if (usageRaw.isNotEmpty()) {
+            usageRaw.split(",").forEach {
+                val parts = it.split(":")
+                if (parts.size == 2) {
+                    dailyUsage[parts[0]] = parts[1].toIntOrNull() ?: 0
+                }
             }
         }
+        
+        Log.d(TAG, "📊 Loaded ${blockedPackages.size} blocked apps")
     }
     
     private fun checkDailyReset() {
@@ -172,7 +177,7 @@ class FocusGuardAccessibilityService : AccessibilityService() {
         
         if (durationMinutes > 0) {
             addUsage(key, durationMinutes)
-            Log.d(TAG, "⏹️ Ended session: $key, duration: $durationMinutes min")
+            Log.d(TAG, "⏹️ Ended session: $key, +$durationMinutes min")
         }
     }
     
@@ -208,211 +213,195 @@ class FocusGuardAccessibilityService : AccessibilityService() {
         if (isBlocking && now - lastBlockTime < BLOCK_COOLDOWN) return
         
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            if (packageName != currentApp) {
-                if (currentApp.isNotEmpty() && blockedPackages.contains(currentApp)) {
-                    endSession(currentApp, now)
+            Log.d(TAG, "📱 App opened: $packageName")
+            
+            if (packageName != currentForegroundApp) {
+                if (currentForegroundApp.isNotEmpty() && blockedPackages.contains(currentForegroundApp)) {
+                    endSession(currentForegroundApp, now)
                 }
-                currentApp = packageName
+                
+                currentForegroundApp = packageName
                 
                 if (!packageName.contains("youtube") && !packageName.contains("instagram")) {
                     isInShorts = false
                     isInReels = false
                 }
                 
-                checkFullAppBlock(packageName, now)
+                checkAndBlockApp(packageName, now)
             }
         }
         
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            checkForShortsAndReels(packageName, now)
+            handleSpecialContent(packageName)
         }
     }
     
-    private fun checkFullAppBlock(packageName: String, now: Long) {
-        if ((packageName.contains("musically") || packageName.contains("ugc.trill")) &&
-            prefs.getBoolean(KEY_BLOCK_TIKTOK, false)) {
-            blockNow("TikTok is blocked", true)
+    // ==================== APP BLOCKING ====================
+    
+    private fun checkAndBlockApp(packageName: String, now: Long) {
+        if (!blockedPackages.contains(packageName)) {
             return
         }
-        
-        if (packageName.contains("snapchat") && prefs.getBoolean(KEY_BLOCK_SNAP, false)) {
-            blockNow("Snapchat is blocked", true)
-            return
-        }
-        
-        if (!blockedPackages.contains(packageName)) return
         
         val budgetMinutes = appBudgets[packageName] ?: 0
         val usedToday = dailyUsage[packageName] ?: 0
         
-        if (budgetMinutes == 0) {
-            blockNow("${getAppName(packageName)} is blocked", true)
-        } else if (usedToday >= budgetMinutes) {
-            blockNow("${getAppName(packageName)}: Daily limit of $budgetMinutes min reached", true)
-        } else {
-            startSession(packageName, now)
-            val remaining = budgetMinutes - usedToday
-            if (remaining <= 5 && remaining > 0) {
-                showNotification("${getAppName(packageName)}: $remaining min left today")
+        Log.d(TAG, "🔍 App: $packageName - Budget: $budgetMinutes, Used: $usedToday")
+        
+        when {
+            budgetMinutes == 0 -> {
+                Log.d(TAG, "🚫 Always block: $packageName")
+                blockFullApp(getAppDisplayName(packageName), packageName, now)
+            }
+            usedToday >= budgetMinutes -> {
+                Log.d(TAG, "🚫 Time limit exceeded: $packageName")
+                blockFullApp(getAppDisplayName(packageName), packageName, now)
+            }
+            else -> {
+                startSession(packageName, now)
+                val remaining = budgetMinutes - usedToday
+                if (remaining <= 5) {
+                    showNotification("${getAppDisplayName(packageName)}: $remaining min left")
+                }
+                Log.d(TAG, "✅ $packageName within budget")
             }
         }
     }
     
-    private fun checkForShortsAndReels(packageName: String, now: Long) {
+    private fun blockFullApp(appName: String, packageName: String, now: Long) {
+        if (isBlocking) return
+        
+        Log.d(TAG, "🚫 BLOCKING APP: $appName")
+        
+        isBlocking = true
+        lastBlockTime = now
+        
+        endSession(packageName, now)
+        performGlobalAction(GLOBAL_ACTION_HOME)
+        showNotification("$appName is blocked")
+        
+        handler.postDelayed({ isBlocking = false }, BLOCK_COOLDOWN)
+    }
+    
+    // ==================== SHORTS/REELS BLOCKING ====================
+    
+    private fun handleSpecialContent(packageName: String) {
         val root = rootInActiveWindow ?: return
         
         when (packageName) {
             "com.google.android.youtube" -> {
-                val blockShorts = prefs.getBoolean(KEY_BLOCK_SHORTS, false)
-                if (blockShorts) {
-                    handleYouTubeShorts(root, now)
+                if (prefs.getBoolean(KEY_BLOCK_SHORTS, false)) {
+                    detectAndBlockYouTubeShorts(root)
                 }
             }
             "com.instagram.android" -> {
-                val blockReels = prefs.getBoolean(KEY_BLOCK_REELS, false)
-                if (blockReels) {
-                    handleInstagramReels(root, now)
+                if (prefs.getBoolean(KEY_BLOCK_REELS, false)) {
+                    detectAndBlockInstagramReels(root)
                 }
             }
         }
     }
     
-    private fun handleYouTubeShorts(root: AccessibilityNodeInfo, now: Long) {
-        if (now - lastShortsBlockTime < BLOCK_RESET_DELAY) {
-            return
-        }
+    private fun detectAndBlockYouTubeShorts(root: AccessibilityNodeInfo) {
+        val now = System.currentTimeMillis()
+        if (now - lastShortsBlockTime < BLOCK_RESET_DELAY) return
         
         var foundShorts = false
         
-        val shortsPlayerIds = listOf(
+        val shortsViewIds = listOf(
             "com.google.android.youtube:id/reel_player_page_container",
-            "com.google.android.youtube:id/shorts_player_container",
-            "com.google.android.youtube:id/reel_video_container"
+            "com.google.android.youtube:id/shorts_container",
+            "com.google.android.youtube:id/shorts_player_container"
         )
         
-        for (id in shortsPlayerIds) {
+        for (id in shortsViewIds) {
             try {
                 val nodes = root.findAccessibilityNodeInfosByViewId(id)
                 if (nodes.isNotEmpty() && nodes[0].isVisibleToUser) {
                     foundShorts = true
-                    Log.d(TAG, "🎯 Shorts detected by view ID")
                     break
                 }
             } catch (e: Exception) { }
         }
         
-        if (!foundShorts) {
-            try {
-                val likeButton = root.findAccessibilityNodeInfosByText("Like")
-                val commentButton = root.findAccessibilityNodeInfosByText("Comment")
-                val shareButton = root.findAccessibilityNodeInfosByText("Share")
-                
-                if (likeButton.isNotEmpty() && commentButton.isNotEmpty() && shareButton.isNotEmpty()) {
-                    foundShorts = true
-                    Log.d(TAG, "🎯 Shorts detected by button layout")
-                }
-            } catch (e: Exception) { }
-        }
-        
         if (foundShorts) {
-            val shortsKey = "youtube/shorts"  // ← MATCH the key used in writeSiteBudgets
+            // ✅ FIXED: Use the same key that is saved (youtube/shorts)
+            val shortsKey = "youtube/shorts"
             val alwaysBlock = prefs.getBoolean(KEY_ALWAYS_BLOCK_SHORTS, false)
             val budgetMinutes = getShortsBudget()
             val usedToday = dailyUsage[shortsKey] ?: 0
             
-            Log.d(TAG, "📊 Shorts - AlwaysBlock: $alwaysBlock, Budget: $budgetMinutes, Used: $usedToday")
-            
-            isInShorts = true
-            
-            var shouldBlock = false
-            var blockReason = ""
+            Log.d(TAG, "📊 Shorts - Budget: $budgetMinutes, Used: $usedToday, AlwaysBlock: $alwaysBlock")
             
             if (alwaysBlock) {
-                shouldBlock = true
-                blockReason = "YouTube Shorts are blocked (Always Block)"
+                blockShortsContent("YouTube Shorts are blocked", shortsKey, now)
             } else if (budgetMinutes <= 0) {
-                shouldBlock = true
-                blockReason = "YouTube Shorts are blocked (No budget set)"
+                blockShortsContent("YouTube Shorts are blocked (no budget)", shortsKey, now)
             } else if (usedToday >= budgetMinutes) {
-                shouldBlock = true
-                blockReason = "YouTube Shorts limit reached ($usedToday/$budgetMinutes min)"
-            }
-            
-            if (shouldBlock) {
-                blockShortsContent(blockReason, shortsKey, now)
+                blockShortsContent("YouTube Shorts limit reached ($usedToday/$budgetMinutes min)", shortsKey, now)
             } else {
-                startSession(shortsKey, now)
-                val remaining = budgetMinutes - usedToday
-                if (remaining <= 5) {
-                    showNotification("YouTube Shorts: $remaining min left today")
+                if (!isInShorts) {
+                    isInShorts = true
+                    startSession(shortsKey, now)
+                    Log.d(TAG, "✅ Shorts within budget, tracking ($usedToday/$budgetMinutes min)")
                 }
-                Log.d(TAG, "✅ Shorts within budget: $usedToday/$budgetMinutes min, tracking time")
             }
         } else {
             if (isInShorts) {
                 isInShorts = false
-                endSession("youtube/shorts", now)
+                endSession("youtube/shorts", System.currentTimeMillis())
                 Log.d(TAG, "✅ Exited Shorts")
             }
         }
     }
     
-    private fun handleInstagramReels(root: AccessibilityNodeInfo, now: Long) {
-        if (now - lastReelsBlockTime < BLOCK_RESET_DELAY) {
-            return
-        }
+    private fun detectAndBlockInstagramReels(root: AccessibilityNodeInfo) {
+        val now = System.currentTimeMillis()
+        if (now - lastReelsBlockTime < BLOCK_RESET_DELAY) return
         
         var foundReels = false
         
-        val reelsPlayerIds = listOf(
-            "com.instagram.android:id/clips_viewer_pager"
+        val reelsViewIds = listOf(
+            "com.instagram.android:id/clips_viewer_pager",
+            "com.instagram.android:id/reels_tray_container"
         )
         
-        for (id in reelsPlayerIds) {
+        for (id in reelsViewIds) {
             try {
                 val nodes = root.findAccessibilityNodeInfosByViewId(id)
                 if (nodes.isNotEmpty() && nodes[0].isVisibleToUser) {
                     foundReels = true
-                    Log.d(TAG, "🎯 Reels detected")
                     break
                 }
             } catch (e: Exception) { }
         }
         
         if (foundReels) {
+            // ✅ FIXED: Use the same key format
             val reelsKey = "instagram/reels"
             val alwaysBlock = prefs.getBoolean(KEY_ALWAYS_BLOCK_REELS, false)
             val budgetMinutes = getReelsBudget()
             val usedToday = dailyUsage[reelsKey] ?: 0
             
-            Log.d(TAG, "📊 Reels - AlwaysBlock: $alwaysBlock, Budget: $budgetMinutes, Used: $usedToday")
-            
-            isInReels = true
-            
-            var shouldBlock = false
-            var blockReason = ""
+            Log.d(TAG, "📊 Reels - Budget: $budgetMinutes, Used: $usedToday")
             
             if (alwaysBlock) {
-                shouldBlock = true
-                blockReason = "Instagram Reels are blocked"
+                blockShortsContent("Instagram Reels are blocked", reelsKey, now)
             } else if (budgetMinutes <= 0) {
-                shouldBlock = true
-                blockReason = "Instagram Reels are blocked (No budget set)"
+                blockShortsContent("Instagram Reels are blocked (no budget)", reelsKey, now)
             } else if (usedToday >= budgetMinutes) {
-                shouldBlock = true
-                blockReason = "Instagram Reels limit reached ($usedToday/$budgetMinutes min)"
-            }
-            
-            if (shouldBlock) {
-                blockShortsContent(blockReason, reelsKey, now)
+                blockShortsContent("Instagram Reels limit reached", reelsKey, now)
             } else {
-                startSession(reelsKey, now)
-                Log.d(TAG, "✅ Reels within budget: $usedToday/$budgetMinutes min")
+                if (!isInReels) {
+                    isInReels = true
+                    startSession(reelsKey, now)
+                    Log.d(TAG, "✅ Reels within budget")
+                }
             }
         } else {
             if (isInReels) {
                 isInReels = false
-                endSession("instagram/reels", now)
+                endSession("instagram/reels", System.currentTimeMillis())
                 Log.d(TAG, "✅ Exited Reels")
             }
         }
@@ -421,15 +410,14 @@ class FocusGuardAccessibilityService : AccessibilityService() {
     private fun getShortsBudget(): Int {
         val siteBudgets = prefs.getString(KEY_SITE_BUDGETS, "") ?: ""
         Log.d(TAG, "Site budgets raw: $siteBudgets")
-        
-        // Try both formats
         siteBudgets.split(",").forEach {
             val parts = it.split(":")
             if (parts.size == 2) {
                 val key = parts[0]
                 val value = parts[1].toIntOrNull() ?: 0
+                // ✅ FIXED: Check both formats
                 if (key == "youtube/shorts" || key == "youtube.com/shorts") {
-                    Log.d(TAG, "Found budget for $key: $value")
+                    Log.d(TAG, "Found budget: $key = $value")
                     return value
                 }
             }
@@ -441,8 +429,12 @@ class FocusGuardAccessibilityService : AccessibilityService() {
         val siteBudgets = prefs.getString(KEY_SITE_BUDGETS, "") ?: ""
         siteBudgets.split(",").forEach {
             val parts = it.split(":")
-            if (parts.size == 2 && (parts[0] == "instagram/reels" || parts[0] == "instagram.com/reels")) {
-                return parts[1].toIntOrNull() ?: 0
+            if (parts.size == 2) {
+                val key = parts[0]
+                val value = parts[1].toIntOrNull() ?: 0
+                if (key == "instagram/reels" || key == "instagram.com/reels") {
+                    return value
+                }
             }
         }
         return 0
@@ -451,7 +443,7 @@ class FocusGuardAccessibilityService : AccessibilityService() {
     private fun blockShortsContent(contentName: String, trackingKey: String, now: Long) {
         if (isBlocking) return
         
-        Log.d(TAG, "🚫 BLOCKING: $contentName")
+        Log.d(TAG, "🚫 BLOCKING CONTENT: $contentName")
         
         isBlocking = true
         lastBlockTime = now
@@ -466,38 +458,12 @@ class FocusGuardAccessibilityService : AccessibilityService() {
         performGlobalAction(GLOBAL_ACTION_BACK)
         showNotification(contentName)
         
-        handler.postDelayed({
-            isBlocking = false
-        }, BLOCK_COOLDOWN)
+        handler.postDelayed({ isBlocking = false }, BLOCK_COOLDOWN)
         
         handler.postDelayed({
-            if (contentName.contains("Shorts")) {
-                isInShorts = false
-            } else if (contentName.contains("Reels")) {
-                isInReels = false
-            }
+            if (contentName.contains("Shorts")) isInShorts = false
+            if (contentName.contains("Reels")) isInReels = false
         }, 500)
-    }
-    
-    private fun blockNow(message: String, goHome: Boolean) {
-        if (isBlocking) return
-        
-        isBlocking = true
-        lastBlockTime = System.currentTimeMillis()
-        
-        if (goHome) {
-            performGlobalAction(GLOBAL_ACTION_HOME)
-        } else {
-            performGlobalAction(GLOBAL_ACTION_BACK)
-        }
-        
-        showNotification(message)
-        
-        handler.postDelayed({
-            isBlocking = false
-        }, BLOCK_COOLDOWN)
-        
-        Log.d(TAG, "🚫 $message")
     }
     
     private fun showNotification(message: String) {
@@ -511,13 +477,14 @@ class FocusGuardAccessibilityService : AccessibilityService() {
         notificationManager?.notify(message.hashCode(), notification)
     }
     
-    private fun getAppName(packageName: String): String {
+    private fun getAppDisplayName(packageName: String): String {
         return when {
             packageName.contains("instagram") -> "Instagram"
             packageName.contains("youtube") -> "YouTube"
             packageName.contains("facebook") -> "Facebook"
             packageName.contains("tiktok") -> "TikTok"
             packageName.contains("snapchat") -> "Snapchat"
+            packageName.contains("whatsapp") -> "WhatsApp"
             else -> packageName.substringAfterLast(".")
         }
     }
@@ -528,9 +495,7 @@ class FocusGuardAccessibilityService : AccessibilityService() {
     
     override fun onDestroy() {
         val now = System.currentTimeMillis()
-        activeSessions.keys.toList().forEach { key ->
-            endSession(key, now)
-        }
+        activeSessions.keys.toList().forEach { endSession(it, now) }
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }

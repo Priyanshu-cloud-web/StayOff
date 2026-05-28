@@ -37,6 +37,10 @@ class MainActivity : FlutterActivity() {
     private var pendingVpnResult: MethodChannel.Result? = null
     private var pendingVpnUrls: List<String> = emptyList()
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -65,6 +69,7 @@ class MainActivity : FlutterActivity() {
                         .putBoolean(KEY_ALWAYS_BLOCK_SHORTS, alwaysBlock)
                         .apply()
                     
+                    Log.d("MainActivity", "✅ Shorts blocking set to: $enableShorts (Always: $alwaysBlock)")
                     result.success(true)
                 }
                 
@@ -80,14 +85,15 @@ class MainActivity : FlutterActivity() {
                     val budgets = call.argument<String>("budgets") ?: ""
                     val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     
-                    // If budget is set for Shorts, ensure timer mode
-                    if (budgets.contains("youtube.com/shorts:")) {
+                    // If budget is set for Shorts with value > 0, ensure timer mode
+                    if (budgets.contains("youtube.com/shorts:") || budgets.contains("youtube/shorts:")) {
                         val parts = budgets.split(",")
                         for (part in parts) {
-                            if (part.startsWith("youtube.com/shorts:")) {
+                            if (part.startsWith("youtube.com/shorts:") || part.startsWith("youtube/shorts:")) {
                                 val budgetValue = part.split(":")[1].toIntOrNull() ?: 0
                                 if (budgetValue > 0) {
                                     prefs.edit().putBoolean(KEY_ALWAYS_BLOCK_SHORTS, false).apply()
+                                    Log.d("MainActivity", "Timer mode enabled for Shorts (budget: $budgetValue min)")
                                 }
                                 break
                             }
@@ -109,7 +115,7 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // APP CHANNEL
+        // APP CHANNEL - Handles app blocking
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             APP_CHANNEL
@@ -129,13 +135,41 @@ class MainActivity : FlutterActivity() {
                     val pkg = call.argument<String>("packageName") ?: return@setMethodCallHandler
                     val budget = call.argument<Int>("budgetMinutes") ?: 0
                     addBlockedApp(pkg, budget)
+                    Log.d("MainActivity", "✅ Added blocked app: $pkg with budget: $budget min")
                     result.success(true)
                 }
                 
                 "removeBlockedApp" -> {
                     val pkg = call.argument<String>("packageName") ?: return@setMethodCallHandler
                     removeBlockedApp(pkg)
+                    Log.d("MainActivity", "✅ Removed blocked app: $pkg")
                     result.success(true)
+                }
+                
+                "getBlockedApps" -> {
+                    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    val blockedPkgs = prefs.getString(KEY_BLOCKED_PKGS, "") ?: ""
+                    val budgets = prefs.getString(KEY_APP_BUDGETS, "") ?: ""
+                    val usage = prefs.getString(KEY_DAILY_USAGE, "") ?: ""
+                    result.success(mapOf(
+                        "blocked" to blockedPkgs,
+                        "budgets" to budgets,
+                        "usage" to usage
+                    ))
+                }
+                
+                "getAllUsage" -> {
+                    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    val usageRaw = prefs.getString(KEY_DAILY_USAGE, "") ?: ""
+                    val usageMap = mutableMapOf<String, Int>()
+                    
+                    usageRaw.split(",").forEach {
+                        val parts = it.split(":")
+                        if (parts.size == 2) {
+                            usageMap[parts[0]] = parts[1].toIntOrNull() ?: 0
+                        }
+                    }
+                    result.success(usageMap)
                 }
                 
                 else -> result.notImplemented()
@@ -158,6 +192,7 @@ class MainActivity : FlutterActivity() {
     private fun addBlockedApp(packageName: String, budgetMinutes: Int) {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         
+        // Add to blocked packages list
         val currentBlocked = prefs.getString(KEY_BLOCKED_PKGS, "") ?: ""
         val blockedSet = if (currentBlocked.isNotEmpty()) {
             currentBlocked.split(",").filter { it.isNotEmpty() }.toMutableSet()
@@ -167,6 +202,7 @@ class MainActivity : FlutterActivity() {
         blockedSet.add(packageName)
         prefs.edit().putString(KEY_BLOCKED_PKGS, blockedSet.joinToString(",")).apply()
         
+        // Add to budgets
         val currentBudgets = prefs.getString(KEY_APP_BUDGETS, "") ?: ""
         val budgetMap = mutableMapOf<String, Int>()
         if (currentBudgets.isNotEmpty()) {
@@ -184,6 +220,7 @@ class MainActivity : FlutterActivity() {
     private fun removeBlockedApp(packageName: String) {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         
+        // Remove from blocked packages list
         val currentBlocked = prefs.getString(KEY_BLOCKED_PKGS, "") ?: ""
         val blockedSet = if (currentBlocked.isNotEmpty()) {
             currentBlocked.split(",").filter { it.isNotEmpty() }.toMutableSet()
@@ -193,6 +230,7 @@ class MainActivity : FlutterActivity() {
         blockedSet.remove(packageName)
         prefs.edit().putString(KEY_BLOCKED_PKGS, blockedSet.joinToString(",")).apply()
         
+        // Remove from budgets
         val currentBudgets = prefs.getString(KEY_APP_BUDGETS, "") ?: ""
         val budgetMap = mutableMapOf<String, Int>()
         if (currentBudgets.isNotEmpty()) {
